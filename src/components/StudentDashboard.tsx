@@ -7,7 +7,7 @@ import {
   LayoutDashboard, HeartPulse, BrainCircuit, MessageCircle, 
   ClipboardCheck, Monitor, Award, Stethoscope, Activity, Cpu, 
   ShieldCheck, BarChart3, Plus, Check, Play, Pause, Coins, Flame,
-  FileText, Download, Send, RefreshCw, Calendar, Volume2, HelpCircle, User, BookOpen, Share2, Video, ChevronRight
+  FileText, Download, Send, RefreshCw, Calendar, Volume2, HelpCircle, User, BookOpen, Share2, Video, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { 
   RESEARCH_PAPERS, LIBRARY_BOOKS, HOMEWORK_LIST, DAO_PROPOSALS,
@@ -31,7 +31,16 @@ const FeatureItem = ({ icon: Icon, label, color, onClick }: any) => (
 
 export default function StudentDashboard({ onLogout }: { onLogout: () => void }) {
   // Navigation modals state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
+
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [attendanceViewTab, setAttendanceViewTab] = useState<'daily' | 'semester'>('daily');
   const [isOffsiteOpen, setIsOffsiteOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isGradesOpen, setIsGradesOpen] = useState(false);
@@ -182,39 +191,62 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
 
   // Semantic Search Research State
   const [searchQuery, setSearchQuery] = useState("");
+  const [researchCategory, setResearchCategory] = useState<'all' | 'math' | 'ai' | 'climate'>('all');
   const [filteredPapers, setFilteredPapers] = useState<ResearchPaper[]>(RESEARCH_PAPERS);
   const [searchFeedback, setSearchFeedback] = useState("");
+  const [selectedResearchPaper, setSelectedResearchPaper] = useState<any | null>(null);
+  const [isResearchDownloading, setIsResearchDownloading] = useState(false);
+  const [researchDownloadProgress, setResearchDownloadProgress] = useState(0);
 
-  const handleSemanticSearch = (e?: React.FormEvent) => {
+  const handleSemanticSearch = (e?: React.FormEvent, categoryOverride?: 'all' | 'math' | 'ai' | 'climate') => {
     if (e) e.preventDefault();
+    const activeCat = categoryOverride !== undefined ? categoryOverride : researchCategory;
+    
+    // Filter first by category
+    let pool = RESEARCH_PAPERS;
+    if (activeCat === 'math') {
+      pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("math")));
+    } else if (activeCat === 'ai') {
+      pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("ai") || t.toLowerCase().includes("algorithm") || t.toLowerCase().includes("blockchain") || t.toLowerCase().includes("data architecture")));
+    } else if (activeCat === 'climate') {
+      pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("climate") || t.toLowerCase().includes("ecological") || t.toLowerCase().includes("mitigation") || t.toLowerCase().includes("marine")));
+    }
+
     if (!searchQuery.trim()) {
-      setFilteredPapers(RESEARCH_PAPERS);
-      setSearchFeedback("");
+      setFilteredPapers(pool);
+      setSearchFeedback(activeCat === 'all' ? "" : `แสดงงานวิจัยและวารสารในหมวดหมู่ที่เลือก (ทั้งหมด ${pool.length} รายการ)`);
       return;
     }
+    
     const q = searchQuery.toLowerCase();
     
     // Fuzzy matching and semantic categorization
-    let results = RESEARCH_PAPERS.filter(p => {
+    let results = pool.filter(p => {
       // Direct matches
       const directMatch = p.title.toLowerCase().includes(q) || 
                           p.abstract.toLowerCase().includes(q) || 
+                          p.journal.toLowerCase().includes(q) || 
+                          p.authors.toLowerCase().includes(q) || 
+                          p.doi.toLowerCase().includes(q) || 
                           p.tags.some(t => t.toLowerCase().includes(q));
       
       // Conceptual / semantic synonyms (e.g. searching "global warming" returns "climate change" papers too)
-      const climateSynonym = (q.includes("warming") || q.includes("greenhouse") || q.includes("eco")) && 
-                            p.tags.some(t => t.includes("Climate Change"));
-      const quantumSynonym = (q.includes("silicon") || q.includes("computer") || q.includes("qubit")) && 
-                            p.tags.some(t => t.includes("Quantum"));
+      const climateSynonym = (q.includes("warming") || q.includes("greenhouse") || q.includes("eco") || q.includes("โลกร้อน") || q.includes("สิ่งแวดล้อม")) && 
+                            p.tags.some(t => t.includes("Climate Change") || t.includes("Marine Bio"));
+      const quantumSynonym = (q.includes("silicon") || q.includes("computer") || q.includes("qubit") || q.includes("ปัญญาประดิษฐ์") || q.includes("บล็อกเชน") || q.includes("โครงสร้างข้อมูล")) && 
+                            p.tags.some(t => t.includes("Quantum") || t.includes("AI Core") || t.includes("Data Architecture"));
+      const mathSynonym = (q.includes("calculus") || q.includes("fractional") || q.includes("แคลคูลัส") || q.includes("เรขาคณิต") || q.includes("สมาคมคณิตศาสตร์") || q.includes("สมการ")) && 
+                            p.tags.some(t => t.includes("Mathematics") || t.includes("Math Association"));
       
-      return directMatch || climateSynonym || quantumSynonym;
+      return directMatch || climateSynonym || quantumSynonym || mathSynonym;
     });
 
     setFilteredPapers(results);
-    setSearchFeedback(`Semantic search: matched ${results.length} database entries for "${searchQuery}"`);
+    setSearchFeedback(`ผลการค้นหา: พบสิ่งพิมพ์วิชาการ/วารสาร ${results.length} รายการเกี่ยวกับการค้นหา "${searchQuery}"`);
   };
 
   // Adaptive Learning - Cognitive AI State
+  const [isAnalyzingCore, setIsAnalyzingCore] = useState(false);
   const [aiMathDifficulty, setAiMathDifficulty] = useState(3); // 1-5
   const [aiCsPace, setAiCsPace] = useState(4); // 1-5
   const [aiRecommendations, setAiRecommendations] = useState<string[]>([
@@ -384,7 +416,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
           <h4 className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-4 font-mono">Frontier Tech & Blockchain Ledger</h4>
           <div className="grid grid-cols-3 gap-3">
             <FeatureItem icon={ShieldCheck} label="ระบบ Blockchain" color="bg-amber-500 font-bold" onClick={() => { setIsBlockchainOpen(true); setBlockchainTab('credentials'); }} />
-            <FeatureItem icon={Award} label="พอร์ตโฟลิโอและงาน" color="bg-indigo-600 font-bold" onClick={() => { setIsBlockchainOpen(true); setBlockchainTab('passport'); }} />
+            <FeatureItem icon={Award} label="พอร์ตโฟลิโอ & มหาลัย" color="bg-indigo-600 font-bold" onClick={() => { setIsBlockchainOpen(true); setBlockchainTab('passport'); }} />
             <FeatureItem icon={Coins} label="รางวัลสะสม L2E" color="bg-rose-500 font-bold" onClick={() => { setIsBlockchainOpen(true); setBlockchainTab('l2e'); }} />
             
             <FeatureItem icon={FileText} label="ห้องสมุดวิจัยวิจัย" color="bg-blue-600" onClick={() => setIsResearchOpen(true)} />
@@ -455,80 +487,253 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
       {/* 1. ATTENDANCE & STATS MODAL */}
       <AnimatePresence>
         {isAttendanceOpen && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 z-50 bg-[#0A0A0A] p-8 flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3"><Clock className="w-6 h-6 text-rose-500" /> Attendance Statistics</h3>
-              <button onClick={() => setIsAttendanceOpen(false)} className="p-2 bg-white/5 rounded-full cursor-pointer"><ArrowLeft className="w-6 h-6 text-white" /></button>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 z-50 bg-[#0A0A0A] p-6 flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <Clock className="w-6 h-6 text-rose-500 animate-pulse" />
+                <div>
+                  <h3 className="text-xl font-bold text-white">Student Attendance Center</h3>
+                  <p className="text-[10px] text-rose-400 font-mono font-bold uppercase tracking-wider leading-none">รายงานข้อมูลการเข้าชั้นเรียนและสรุปสถิติตลอดทั้งภาคเรียน</p>
+                </div>
+              </div>
+              <button onClick={() => setIsAttendanceOpen(false)} className="p-2 bg-white/5 rounded-full cursor-pointer hover:bg-white/10 transition-colors"><ArrowLeft className="w-6 h-6 text-white" /></button>
             </div>
-            <div className="space-y-6 overflow-y-auto scrollbar-hide pb-12 flex-1">
-              <div className="bg-gradient-to-br from-rose-950 to-slate-900 border border-rose-500/20 p-6 rounded-3xl text-center">
-                <div className="text-[12px] uppercase text-rose-400 tracking-widest mb-2 font-mono">Present Rate (สถิติมาเรียน)</div>
-                <div className="text-5xl font-mono text-white font-black">97.2%</div>
-                <div className="text-xs text-white/50 mt-1">142 Attended out of 146 classes</div>
-              </div>
 
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                  <div className="text-xl font-bold text-emerald-400">142</div>
-                  <div className="text-[9px] text-white/40">มา (Present)</div>
-                </div>
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                  <div className="text-xl font-bold text-amber-400">3</div>
-                  <div className="text-[9px] text-white/40">ลา (Leave)</div>
-                </div>
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                  <div className="text-xl font-bold text-red-400">1</div>
-                  <div className="text-[9px] text-white/40">ขาด (Absent)</div>
-                </div>
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                  <div className="text-xl font-bold text-orange-400">2</div>
-                  <div className="text-[9px] text-white/40">สาย (Late)</div>
-                </div>
-              </div>
+            {/* Attendance Toggle View Tabs */}
+            <div className="grid grid-cols-2 gap-2 mb-6 bg-white/5 p-1 rounded-2xl border border-white/5 max-w-md mx-auto w-full">
+              <button 
+                onClick={() => setAttendanceViewTab('daily')}
+                className={`py-2 text-[10.5px] font-bold rounded-xl transition-all cursor-pointer ${attendanceViewTab === 'daily' ? 'bg-rose-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+              >
+                รายงานประจำวัน & แจ้งเตือน
+              </button>
+              <button 
+                onClick={() => setAttendanceViewTab('semester')}
+                className={`py-2 text-[10.5px] font-bold rounded-xl transition-all cursor-pointer ${attendanceViewTab === 'semester' ? 'bg-rose-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+              >
+                สรุปสถิติตลอดทั้งเทอม
+              </button>
+            </div>
 
-              {/* Auto push reminders logs */}
-              <div className="space-y-3">
-                <h4 className="text-rose-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block animate-pulse"></span>
-                  ระบบแจ้งเตือนกริ่งอิเล็กทรอนิกส์ (Auto Push Alerts)
-                </h4>
-                <div className="space-y-2">
-                  {autoNotifications.map((notif, idx) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/15 space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-white text-xs font-bold font-sans flex items-center gap-1.5">
-                          🔔 {notif.title}
-                        </span>
-                        <span className="text-[9px] text-white/40 font-mono">{notif.time}</span>
-                      </div>
-                      <p className="text-[11px] text-white/60 leading-normal">{notif.desc}</p>
+            <div className="space-y-6 flex-1 max-w-4xl mx-auto w-full select-none pb-12">
+              
+              {/* Daily / Recent Log View Tab */}
+              {attendanceViewTab === 'daily' ? (
+                <div className="space-y-6">
+                  {/* Executive KPI Box */}
+                  <div className="bg-gradient-to-br from-rose-950 to-slate-900 border border-rose-500/20 p-6 rounded-3xl text-center">
+                    <div className="text-[12px] uppercase text-rose-400 tracking-widest mb-2 font-mono">Present Rate (สถิติมาเรียน)</div>
+                    <div className="text-5xl font-mono text-white font-black">97.2%</div>
+                    <div className="text-xs text-white/50 mt-1">142 Attended out of 146 classes</div>
+                  </div>
+
+                  {/* Summary Small cards */}
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                      <div className="text-xl font-bold text-emerald-400">142</div>
+                      <div className="text-[9px] text-white/40">มา (Present)</div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                      <div className="text-xl font-bold text-amber-400">3</div>
+                      <div className="text-[9px] text-white/40">ลา (Leave)</div>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                      <div className="text-xl font-bold text-red-400">1</div>
+                      <div className="text-[9px] text-white/40">ขาด (Absent)</div>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                      <div className="text-xl font-bold text-orange-400">2</div>
+                      <div className="text-[9px] text-white/40">สาย (Late)</div>
+                    </div>
+                  </div>
 
-              <div className="space-y-3">
-                <h4 className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Recent Attendance Log</h4>
-                <div className="space-y-2">
-                  {[
-                    { date: 'Jun 03, 2026', time: '07:44 AM', status: 'On-time (มา)', detail: 'Gate scan #1' },
-                    { date: 'Jun 02, 2026', time: '08:12 AM', status: 'Late (สาย)', detail: 'Over 8:00 cutoff' },
-                    { date: 'Jun 01, 2026', time: '07:51 AM', status: 'On-time (มา)', detail: 'Gate scan #2' },
-                    { date: 'May 28, 2026', time: '--:--', status: 'Sick Leave (ลาป่วย)', detail: 'Submitted by parent' }
-                  ].map((log, index) => (
-                    <div key={index} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                  {/* Auto push reminders logs */}
+                  <div className="space-y-3">
+                    <h4 className="text-rose-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 pl-1">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 inline-block animate-pulse"></span>
+                      ระบบแจ้งเตือนกริ่งอิเล็กทรอนิกส์ (Auto Push Alerts)
+                    </h4>
+                    <div className="space-y-2">
+                      {autoNotifications.map((notif, idx) => (
+                        <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/15 space-y-1">
+                          <div className="flex justify-between items-center font-sans">
+                            <span className="text-white text-xs font-bold flex items-center gap-1.5">
+                              🔔 {notif.title}
+                            </span>
+                            <span className="text-[10px] text-white/40 font-mono">{notif.time}</span>
+                          </div>
+                          <p className="text-[11.5px] text-white/65 leading-normal font-sans">{notif.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-white/40 text-[10px] font-bold uppercase tracking-widest pl-1">Recent Attendance Log</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { date: 'Jun 03, 2026', time: '07:44 AM', status: 'On-time (มา)', detail: 'Gate scan #1' },
+                        { date: 'Jun 02, 2026', time: '08:12 AM', status: 'Late (สาย)', detail: 'Over 8:00 cutoff' },
+                        { date: 'Jun 01, 2026', time: '07:51 AM', status: 'On-time (มา)', detail: 'Gate scan #2' },
+                        { date: 'May 28, 2026', time: '--:--', status: 'Sick Leave (ลาป่วย)', detail: 'Submitted by parent' }
+                      ].map((log, index) => (
+                        <div key={index} className="bg-white/5 p-4 border border-white/5 rounded-2.5xl flex justify-between items-center hover:bg-white/10 transition-colors">
+                          <div>
+                            <div className="text-white text-xs font-bold">{log.date}</div>
+                            <div className="text-[9px] text-white/60">{log.detail}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-xs font-bold ${log.status.includes('On-time') ? 'text-emerald-400' : log.status.includes('Late') ? 'text-orange-400' : 'text-amber-400'}`}>{log.status}</div>
+                            <div className="text-[9px] text-white/45 font-mono">{log.time}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* SEMESTER COMPREHENSIVE OVERVIEW VIEW */
+                <div className="space-y-6">
+                  
+                  {/* Highlights and Cumulative Rate */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Radial / Progress Circle display card */}
+                    <div className="md:col-span-4 bg-white/5 border border-white/10 p-5 rounded-3xl flex flex-col justify-center items-center text-center space-y-2">
+                      <span className="text-[9px] text-rose-400 uppercase font-mono tracking-widest font-bold">เทอม 1/2569 รวม</span>
+                      <div className="relative w-28 h-28 flex items-center justify-center">
+                        <svg className="absolute w-full h-full transform -rotate-90">
+                          <circle cx="56" cy="56" r="48" className="stroke-white/10 fill-none" strokeWidth="6" />
+                          <circle cx="56" cy="56" r="48" className="stroke-rose-600 fill-none transition-all duration-1000" strokeWidth="6" strokeDasharray="301.6" strokeDashoffset="10.5" />
+                        </svg>
+                        <div className="text-center">
+                          <span className="text-2xl font-black text-white font-mono block">96.5%</span>
+                          <span className="text-[9px] text-white/45 font-sans leading-none block">มาสายสะสม 2%</span>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-white/60 leading-tight">มาจริง 86 วันสาย 2 วัน จากกำหนดวันเปิดภาคเรียน 90 วัน</div>
+                    </div>
+
+                    {/* Quick Insight Paragraph */}
+                    <div className="md:col-span-8 bg-[#150d0e] border border-rose-500/10 p-5 rounded-3xl flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <span className="text-[9px] text-rose-450 text-rose-400 font-mono font-bold uppercase tracking-wider block">★ COGNITIVE ENGAGEMENT INSIGHT</span>
+                        <h4 className="text-white font-bold text-sm">สถิติความรับผิดชอบและการจดจ่อ (Excellent Attendance)</h4>
+                        <p className="text-[11.5px] text-white/70 leading-relaxed font-sans">
+                          นักเรียนรักษามาตรฐานการตรงต่อเวลาได้อย่างเป็นระเบียบเรียบร้อย อัตราความเฉื่อยไม่พบพฤติกรรมหนีเรียน สอดคล้องประสานกับเกียรติบัตรปัญญาประดิษฐ์และดัชนีจดจ่อ Focus Mode ในเกณฑ์ระดับดีเยี่ยม
+                        </p>
+                      </div>
+
+                      {/* Cumulative stats legend */}
+                      <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3.5 mt-2.5">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-white/40 block">ชั่วโมงบันทึกเวลาเรียน</span>
+                          <span className="text-white text-xs font-bold font-mono">172.5 ชั่วโมง (มาสาย 0.5%)</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-white/40 block">ความล่าช้าสะสมทั้งหมด</span>
+                          <span className="text-yellow-400 text-xs font-bold font-mono">31 นาที (ไม่ขัดต่อระบบประเมิน)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Heatmap-like Daily Attendance Grid for 90 Days */}
+                  <div className="bg-[#0e0e0e] border border-white/5 p-5 rounded-3xl space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1.5 pb-2 border-b border-white/5">
                       <div>
-                        <div className="text-white text-xs font-bold">{log.date}</div>
-                        <div className="text-[9px] text-white/60">{log.detail}</div>
+                        <span className="text-[10px] text-rose-400 font-mono font-bold uppercase tracking-widest block">SEMESTER DAY-BY-DAY ATTENDANCE HEATMAP (90 วัน)</span>
+                        <p className="text-[9px] text-white/40 mt-1">แต่ละช่องคือตารางเรียน เรียงตามสัปดาห์ (วันจันทร์ ถึง วันศุกร์)</p>
                       </div>
-                      <div className="text-right">
-                        <div className={`text-xs font-bold ${log.status.includes('On-time') ? 'text-emerald-400' : log.status.includes('Late') ? 'text-orange-400' : 'text-amber-400'}`}>{log.status}</div>
-                        <div className="text-[9px] text-white/40">{log.time}</div>
+                      <div className="flex flex-wrap gap-2.5 text-[8.5px] text-white/50 font-mono">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-550 bg-emerald-580 bg-emerald-500 inline-block" /> มาเรียน (84)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-500 inline-block" /> สาย (2)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> ลา (3)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-rose-600 inline-block" /> ขาด (1)</span>
                       </div>
                     </div>
-                  ))}
+
+                    {/* Calendar grid rendering programmed deterministically for high fidelity */}
+                    <div className="grid grid-cols-10 sm:grid-cols-18 gap-1.5 py-2">
+                      {Array.from({ length: 90 }, (_, i) => {
+                        let status: 'Present' | 'Late' | 'Leave' | 'Absent' = 'Present';
+                        let label = 'มาเรียนปกติ';
+                        let colorClass = 'bg-emerald-550 bg-emerald-600';
+                        if (i === 12) { status = 'Late'; label = 'สาย (8:12)'; colorClass = 'bg-yellow-500'; }
+                        else if (i === 34) { status = 'Leave'; label = 'ลาป่วย (มีใบอนุญาต)'; colorClass = 'bg-blue-500'; }
+                        else if (i === 55) { status = 'Absent'; label = 'ขาดเรียน'; colorClass = 'bg-rose-600'; }
+                        else if (i === 72) { status = 'Late'; label = 'สาย'; colorClass = 'bg-yellow-500'; }
+                        else if (i === 81) { status = 'Leave'; label = 'ลากิจ'; colorClass = 'bg-blue-500'; }
+                        else if (i === 88) { status = 'Leave'; label = 'ลา'; colorClass = 'bg-blue-500'; }
+
+                        return (
+                          <div 
+                            key={i}
+                            title={`วันที่ ${i + 1}: ${label}`}
+                            className={`aspect-square sm:w-full rounded-md border border-white/5 ${colorClass} text-[8px] flex items-center justify-center font-bold text-black/40 hover:scale-115 transition-transform cursor-pointer relative group`}
+                          >
+                            {i + 1}
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 bg-black text-white text-[7px] p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none mb-1">
+                              Day {i + 1}: {label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Monthly breakdowns */}
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3">
+                    <span className="text-[10px] text-white/45 font-mono uppercase font-bold tracking-widest pl-0.5">การมาเรียนรายเดือน (Monthly Attendance Breakdown)</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {[
+                        { month: 'มิถุนายน 2026', rate: '100%', detail: 'มา 15 คาบ, ลา 0 คาบ', barWidth: 'w-full' },
+                        { month: 'พฤษภาคม 2026', rate: '96%', detail: 'มา 24 คาบ, ลา 1 คาบ', barWidth: 'w-[96%]' },
+                        { month: 'เมษายน 2026', rate: '95%', detail: 'มา 22 คาบ, ขาด 1 คาบ', barWidth: 'w-[95%]' },
+                        { month: 'มีนาคม 2026', rate: '92%', detail: 'มา 24 คาบ, สาย 1 คาบ, ลา 1 คาบ', barWidth: 'w-[92%]' }
+                      ].map((item, idx) => (
+                        <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-1.5 hover:bg-white/10 transition-colors">
+                          <div className="flex justify-between font-bold">
+                            <span className="text-white">{item.month}</span>
+                            <span className="text-emerald-400 font-mono">{item.rate}</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                            <div className={`bg-rose-500 h-full ${item.barWidth}`} />
+                          </div>
+                          <span className="text-[9.5px] text-white/40 block leading-none">{item.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Trajectory comparison by Subjects */}
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3">
+                    <span className="text-[10px] text-white/45 font-mono uppercase font-bold tracking-widest pl-0.5">สถิติแยกตามกลุ่มสาระการเรียนรู้ (Attendance by Subject Area)</span>
+                    <div className="space-y-3">
+                      {[
+                        { title: 'Advanced Physics (ฟิสิกส์วิจัยและแบบทัศนะ)', attended: '39 / 40 คาบ', percent: '97.5%', color: 'from-amber-550 to-orange-500' },
+                        { title: 'Mathematical Calculus (แคลคูลัสแผนเรขาคณิต)', attended: '40 / 40 คาบ', percent: '100%', color: 'from-blue-600 to-indigo-500' },
+                        { title: 'Computer Science and AI Programming', attended: '28 / 30 คาบ', percent: '93.3%', color: 'from-emerald-600 to-teal-500' },
+                        { title: 'Social & Collaborative Merits (จิตอาสาและสังคม)', attended: '36 / 36 คาบ', percent: '100%', color: 'from-purple-600 to-pink-500' }
+                      ].map((sub, idx) => (
+                        <div key={idx} className="space-y-1 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white/85 font-semibold leading-tight">{sub.title}</span>
+                            <div className="space-x-2 font-mono">
+                              <span className="text-white/50">{sub.attended}</span>
+                              <span className="text-rose-400 font-bold">{sub.percent}</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-rose-500 to-rose-600 h-full" style={{ width: sub.percent }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
-              </div>
+              )}
+
             </div>
           </motion.div>
         )}
@@ -681,7 +886,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                   </div>
                 </div>
                 <button 
-                  onClick={() => alert(`📩 ดาวน์โหลดใบรายงานผลการเรียนลายนิ้วมือดิจิทัลของเทอม ${gradeTermSelect} สำเร็จ!`)}
+                  onClick={() => showToast(`📩 ดาวน์โหลดใบรายงานผลการเรียนลายนิ้วมือดิจิทัลของเทอม ${gradeTermSelect} สำเร็จ!`)}
                   className="p-4 bg-white/10 hover:bg-white/20 rounded-full cursor-pointer text-white"
                 >
                   <Download className="w-6 h-6" />
@@ -1090,7 +1295,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                     <p className="text-[10px] text-white/50">Dr. Sarah Thompson • Active Now</p>
                   </div>
                   <button 
-                    onClick={() => { setClassroomSection('replays'); alert("Loading real-time classroom interface..."); }}
+                    onClick={() => { setClassroomSection('replays'); showToast("Loading real-time classroom interface..."); }}
                     className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-[9px] uppercase font-bold tracking-widest cursor-pointer"
                   >
                     Join Feed
@@ -1314,7 +1519,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                   </div>
                   
                   <button 
-                    onClick={() => alert(`🔬 เริ่มการสแกน QR อุปกรณ์เพื่อแสดงภาพฉายแสง Hologram สมัครผ่านโปรเจคเตอร์ภายในโมดูลห้อง #303`)} 
+                    onClick={() => showToast(`🔬 เริ่มการสแกน QR อุปกรณ์เพื่อแสดงภาพฉายแสง Hologram สมัครผ่านโปรเจคเตอร์ภายในโมดูลห้อง #303`)} 
                     className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl text-xs uppercase cursor-pointer"
                   >
                     เปิดฟลักซ์ลำแสงฉาย Hologram
@@ -1430,7 +1635,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                           onClick={() => {
                             setIsSimulating(true);
                             setTimeout(() => setIsSimulating(false), 2000);
-                            alert(`🚀 เริ่มต้นบันทึกพัลส์การทดลองจำลองด้วยแรงกระทำ ${simForce}N มวล ${simMass}kg. คะแนนสะสมความเข้าใจส่งถึงผู้สอน ดึงบล็อคข้อมูลพฤติกรรมเรียบร้อย!`);
+                            showToast(`🚀 เริ่มต้นบันทึกพัลส์การทดลองจำลองด้วยแรงกระทำ ${simForce}N มวล ${simMass}kg. คะแนนสะสมความเข้าใจส่งถึงผู้สอน ดึงบล็อคข้อมูลพฤติกรรมเรียบร้อย!`);
                           }}
                           className={`w-full py-3 text-xs font-bold uppercase text-black rounded-xl transition-all cursor-pointer ${
                             isSimulating ? 'bg-cyan-300 animate-pulse' : 'bg-cyan-400 hover:bg-cyan-300'
@@ -1516,7 +1721,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                   </div>
 
                   <button 
-                    onClick={() => alert(`📸 บันทึกไฟล์พิกัดและโมเดลเวกเตอร์ที่พล็อต AR แนบกับโปรเจคของ Alex ลงแกลเลอรี่สำเร็จ!`)}
+                    onClick={() => showToast(`📸 บันทึกไฟล์พิกัดและโมเดลเวกเตอร์ที่พล็อต AR แนบกับโปรเจคของ Alex ลงแกลเลอรี่สำเร็จ!`)}
                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase cursor-pointer"
                   >
                     ถ่ายภาพบันทึกพิกัด AR จำลอง
@@ -1737,7 +1942,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                         </div>
                       </div>
                       <button 
-                        onClick={() => alert(`⏳ เริ่มต้นทำแบบทดสอบจำลองจับเวลากริ่งคลังอาวุธสำหรับวิชา ${ex.subject}. ตรวจสอบความถูกต้องผ่าน Blockchain เมื่อส่งเกรด.`)}
+                        onClick={() => showToast(`⏳ เริ่มทำแบบทดสอบจำลองสำหรับวิชา ${ex.subject}. ตรวจสอบความถูกต้องผ่าน Blockchain เมื่อส่งเกรด.`)}
                         className="px-3.5 py-2 bg-pink-600 hover:bg-pink-550 text-white rounded-xl text-[9px] font-bold font-sans cursor-pointer uppercase flex-shrink-0"
                       >
                         Start Test
@@ -1794,7 +1999,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                       <div className="space-y-1 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px]">
                         <span className="text-white/40">ความคืบหน้าในการเรียน (Progress): <strong className="text-blue-400 font-mono">{tb.prog}</strong></span>
                         <button 
-                          onClick={() => alert(`📥 ดาวน์โหลดตำราอิเล็กทรอนิกส์ ${tb.title} (${tb.size}) ลงเครื่องสำหรับการใช้งานออฟไลน์สำเร็จ!`)}
+                          onClick={() => showToast(`📥 ดาวน์โหลดตำราอิเล็กทรอนิกส์ ${tb.title} (${tb.size}) สำเร็จ!`)}
                           className="text-blue-400 font-bold hover:underline font-sans cursor-pointer"
                         >
                           Download Read Offline
@@ -1832,7 +2037,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                           
                           {/* Play simulated button */}
                           <button 
-                            onClick={() => alert(`Streaming archive lecture: ${lec.title} \n\n[Speed configured at 1.5x, auto-synchronized closed captions (CC) ภาษาไทยเรียบร้อย]`)}
+                            onClick={() => showToast(`Streaming: ${lec.title} [ความเร็ว 1.5x, ซับไตเติลภาษาไทยเรียบร้อย]`)}
                             className="p-3 bg-amber-500 hover:bg-amber-400 rounded-xl text-black cursor-pointer flex-shrink-0"
                           >
                             <Play className="w-4 h-4 fill-black text-black" />
@@ -1846,7 +2051,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                             {['1.0x', '1.25x', '1.5x', '2.0x'].map((speed) => (
                               <button 
                                 key={speed}
-                                onClick={() => alert(`ความเร็วจำลองถูกปรับแต่งเป็น: ${speed}`)}
+                                onClick={() => showToast(`ปรับเล่นความเร็ววิดีโอจำลองเป็น: ${speed}`)}
                                 className="px-2 py-0.5 bg-white/5 border border-white/15 rounded text-[9px] text-white/70 hover:bg-white/10"
                               >
                                 {speed}
@@ -1941,61 +2146,245 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
       {/* 12. COGNITIVE AI CORE */}
       <AnimatePresence>
         {isAIOpen && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 z-50 bg-[#0A0A0A] p-8 flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3"><Cpu className="w-6 h-6 text-violet-600" /> Cognitive AI Core</h3>
-              <button onClick={() => setIsAIOpen(false)} className="p-2 bg-white/5 rounded-full cursor-pointer"><ArrowLeft className="w-6 h-6 text-white" /></button>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            exit={{ opacity: 0, scale: 0.95 }} 
+            className="fixed inset-0 z-50 bg-[#070913] p-6 flex flex-col overflow-y-auto scrollbar-hide select-none"
+          >
+            {/* Header with Glowing Effect */}
+            <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/10 relative">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-violet-600/20 text-violet-400 rounded-xl border border-violet-500/30 animate-pulse">
+                  <Cpu className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-1.5 leading-none">
+                    Cognitive AI Core <span className="text-[9px] bg-violet-500 text-white font-mono px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">Live</span>
+                  </h3>
+                  <p className="text-[10px] text-violet-400 font-mono font-bold tracking-widest uppercase mt-1">ระบบวิเคราะห์จุดเด่นและพัฒนาการนักเรียน</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsAIOpen(false)} 
+                className="p-2 bg-white/5 hover:bg-white/10 rounded-full cursor-pointer transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </button>
             </div>
-            <div className="space-y-6 overflow-y-auto scrollbar-hide pb-12">
-              <div className="bg-gradient-to-br from-violet-950 to-indigo-950 p-6 rounded-3xl border border-violet-500/20 space-y-3">
-                <span className="text-[10px] bg-violet-400/20 text-violet-300 border border-violet-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-widest tracking-wider">Dynamic Curriculum</span>
-                <p className="text-xs text-white/80 leading-relaxed">Adjust your target difficulty and comprehension speed metrics. AI instantly computes supplementary lectures.</p>
-              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center text-xs mb-2">
-                    <span className="text-white/60">Math Focus Difficulty</span>
-                    <span className="text-violet-400 font-bold">Tier {aiMathDifficulty}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="5" 
-                    value={aiMathDifficulty}
-                    onChange={(e) => handleTweakAIParts(parseInt(e.target.value), aiCsPace)}
-                    className="w-full accent-violet-600"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center text-xs mb-2">
-                    <span className="text-white/60">Coding Syllabus Speed</span>
-                    <span className="text-violet-400 font-bold">Pace {aiCsPace}x</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="5" 
-                    value={aiCsPace}
-                    onChange={(e) => handleTweakAIParts(aiMathDifficulty, parseInt(e.target.value))}
-                    className="w-full accent-violet-600"
-                  />
+            {/* Dynamic Loading Overlay during AI scan */}
+            {isAnalyzingCore ? (
+              <div className="flex-1 flex flex-col items-center justify-center space-y-4">
+                <RefreshCw className="w-12 h-12 text-violet-400 animate-spin" />
+                <div className="text-center space-y-1">
+                  <span className="text-xs font-bold text-white block font-mono">NEURAL NETWORK COMPUTING...</span>
+                  <span className="text-[10px] text-white/50 block leading-relaxed">กำลังประมวลผลคะแนนประเมินพฤติกรรม สถิติการสะสมเหรียญ L2E <br /> และจุดอ่อนด้านสมการรายสัปดาห์</span>
                 </div>
               </div>
+            ) : (
+              <div className="space-y-5 pb-10">
+                {/* Dynamic Executive Banner */}
+                <div className="bg-gradient-to-r from-violet-950/50 via-[#13102d]/80 to-purple-950/20 p-5 rounded-3xl border border-violet-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                      คลังวิเคราะห์อัจฉริยะ (Cognitive Profile)
+                    </span>
+                    <span className="text-[9px] text-white/35 font-mono font-bold">ACTIVE</span>
+                  </div>
+                  <p className="text-[11.5px] text-white/80 leading-relaxed font-sans">
+                    ระบบ AI ทำการสืบค้นตรวจวัดพฤติกรรมการเรียน การตอบแบบวัด SDQ และสถิติการทบทวนโจทย์ PISA ของนักเรียน เพื่อระบุจุดเด่น-จุดร่วมที่ต้องการพัฒนาการอย่างถาวร
+                  </p>
+                  
+                  {/* Neural Scan Trigger Button */}
+                  <button
+                    onClick={() => {
+                      setIsAnalyzingCore(true);
+                      setTimeout(() => {
+                        setIsAnalyzingCore(false);
+                        // Dynamic adjustment effect
+                        handleTweakAIParts(aiMathDifficulty, aiCsPace);
+                      }, 1500);
+                    }}
+                    className="w-full mt-2 py-2.5 bg-violet-600 hover:bg-violet-500 active:scale-98 text-white font-bold rounded-2xl text-[10px] uppercase font-mono tracking-widest cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-violet-950/20"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> RE-SCAN NEURAL COMPETENCY (วิเคราะห์ประมวลใหม่)
+                  </button>
+                </div>
 
-              <div className="space-y-3">
-                <h4 className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Recommended Supplementary Path</h4>
-                <div className="space-y-2">
-                  {aiRecommendations.map((rec, i) => (
-                    <div key={i} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex gap-3 items-center">
-                      <Sparkles className="w-5 h-5 text-violet-400 flex-shrink-0" />
-                      <span className="text-xs text-white font-bold">{rec}</span>
+                {/* 1. CHART AREA: FIVE-DIMENSIONAL COGNITIVE METRICS */}
+                <div className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3.5">
+                  <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                    <span className="text-[10px] text-white/40 uppercase font-mono font-bold tracking-widest pl-0.5">ดัชนีคะแนนทักษะปัญญา (Cognitive Indices)</span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold uppercase">Optimal Confidence 98.4%</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Dimension 1: Mathematics & Physics logic */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-white font-semibold flex items-center gap-1">📘 ตรรกะคณิตศาสตร์ & ฟิสิกส์</span>
+                        <div className="space-x-1.5">
+                          <span className="text-[9px] bg-violet-500/20 text-violet-300 font-bold px-1.5 py-0.5 rounded-md font-mono">Tier {aiMathDifficulty}</span>
+                          <span className="text-violet-400 font-bold font-mono">{(aiMathDifficulty * 20).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-violet-500 to-indigo-500 h-full transition-all duration-500" 
+                          style={{ width: `${aiMathDifficulty * 20}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-white/30 block pl-1">ระดับประเมินความสอดคล้องสมการกลศาสตร์คลื่นฟิสิกส์เชิงควอนตัมจำลอง</span>
                     </div>
-                  ))}
+
+                    {/* Dimension 2: Coding & Algorithmic Pace */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-white font-semibold flex items-center gap-1">💻 การเขียนคำสั่งโค้ดดิ้ง & อัลกอริทึม</span>
+                        <div className="space-x-1.5">
+                          <span className="text-[9px] bg-violet-500/20 text-violet-300 font-bold px-1.5 py-0.5 rounded-md font-mono">Pace {aiCsPace}x</span>
+                          <span className="text-violet-400 font-bold font-mono">{(aiCsPace * 19).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-500" 
+                          style={{ width: `${aiCsPace * 19}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-white/30 block pl-1">ความคงเส้นคงวาในการควบคุมลูปสมดุล O(log N) สำหรับ High-stakes lookups</span>
+                    </div>
+
+                    {/* Dimension 3: Focus & Meditation Index */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-white font-semibold flex items-center gap-1">🧘 สมาธิและการควบคุมตนเอง (Focus Index)</span>
+                        <span className="text-yellow-400 font-bold font-mono">75%</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                        <div className="bg-yellow-500 h-full w-[75%]" />
+                      </div>
+                      <span className="text-[9px] text-white/30 block pl-1">วัดจากเซสชั่นคุมความถี่และสะสมเหรียญการจดจ่อ (Focus track sessions)</span>
+                    </div>
+
+                    {/* Dimension 4: SDQ & Conduct Resilience */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] items-center">
+                        <span className="text-white font-semibold flex items-center gap-1">🤝 ความมั่นคงทางจิตและอารมณ์สังคม (SDQ/EQ)</span>
+                        <span className="text-emerald-400 font-bold font-mono">92%</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full w-[92%]" />
+                      </div>
+                      <span className="text-[9px] text-white/30 block pl-1">คำนวณจากแบบประเมินความตึงเครียดและสถิติสิทธิ์จิตอาสาเพื่อนฝูง</span>
+                    </div>
+                  </div>
                 </div>
+
+                {/* 2. REAL-TIME STRENGTHS / WEAKNESSES DETAIL WINDOW */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Strengths Card */}
+                  <div className="bg-[#0e1614] border border-emerald-500/10 p-4.5 rounded-3xl space-y-2.5">
+                    <span className="text-[9.5px] text-emerald-400 font-mono font-bold uppercase tracking-wider block">✓ จุดแข็งสูงสุด (AI HIGHLIGHT STRENGTHS)</span>
+                    <ul className="space-y-2 text-[11px] text-white/75 font-sans leading-relaxed">
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-emerald-400 mt-0.5">•</span>
+                        <span><strong>ยอดเยี่ยมด้านสัมประสิทธิ์การแก้ปัญหาอัลกอริทึม</strong> แสดงความต่อเนื่องในการทดสอบระดับ AVL Tree เป็นเลิศ</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-emerald-400 mt-0.5">•</span>
+                        <span><strong>จิตใจมั่นคงและทนแรงกดดันสูง (Resilience Score 92%)</strong> สกัดจากสถิติประสาทสัมพันธ์ SDQ</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Weaknesses Card */}
+                  <div className="bg-[#1b0f10] border border-rose-500/10 p-4.5 rounded-3xl space-y-2.5">
+                    <span className="text-[9.5px] text-rose-400 font-mono font-bold uppercase tracking-wider block">⚠️ จุดที่ต้องพัฒนาเร่งด่วน (AREAS FOR RECONSTRUCTION)</span>
+                    <ul className="space-y-2 text-[11px] text-white/75 font-sans leading-relaxed">
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-rose-400 mt-0.5">•</span>
+                        <span><strong>สมาธิหลุดช่วงท้ายของคาบเรียนฟิสิกส์ชั้นสูง (Tier 4 ขึ้นไป)</strong> แนะนำทดลองเปิด Binaural Audio Track เกลากระแสสมาธิ</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-rose-400 mt-0.5">•</span>
+                        <span><strong>ขาดความเชื่อมโยงในส่วนระเบียบวิธีวิจัย</strong> คลังสรุปยังมีบททบทวนโครงสร้างวิจัยไม่ครบถ้วน</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 3. ADAPTIVE LEVEL TWEAKING CONTROLS */}
+                <div className="bg-[#111322] border border-white/10 p-5 rounded-3.5xl space-y-4">
+                  <span className="text-[10px] text-white/40 font-mono font-bold uppercase tracking-widest pl-0.5 block">ส่วนปรับแต่งวิถีเส้นทางความเร็วบทเรียน</span>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between items-center text-xs mb-1.5">
+                        <span className="text-white/75 font-medium">ระดับความยากคณิตศาสตร์เป้าหมาย (Math Focus Level)</span>
+                        <span className="text-violet-400 font-bold font-mono">Tier {aiMathDifficulty} / 5</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="5" 
+                        value={aiMathDifficulty}
+                        onChange={(e) => handleTweakAIParts(parseInt(e.target.value), aiCsPace)}
+                        className="w-full accent-violet-500 h-1 bg-white/10 rounded-lg cursor-pointer animate-none"
+                      />
+                      <div className="flex justify-between text-[8px] text-white/30 pt-1 font-mono">
+                        <span>Tier 1 (พื้นฐาน)</span>
+                        <span>Tier 3 (กลาง)</span>
+                        <span>Tier 5 (ควอนตัมชั้นสูง)</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center text-xs mb-1.5">
+                        <span className="text-white/75 font-medium">รหัสวิถีความเร็วการเรียน (Coding Syllabus Speed)</span>
+                        <span className="text-violet-400 font-bold font-mono">Pace {aiCsPace}x / 5x</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="5" 
+                        value={aiCsPace}
+                        onChange={(e) => handleTweakAIParts(aiMathDifficulty, parseInt(e.target.value))}
+                        className="w-full accent-violet-500 h-1 bg-white/10 rounded-lg cursor-pointer animate-none"
+                      />
+                      <div className="flex justify-between text-[8px] text-white/30 pt-1 font-mono">
+                        <span>1x (คำนึงรายละเอียด)</span>
+                        <span>3x (ปานกลาง)</span>
+                        <span>5x (ความเร็วเทอร์โบ)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. REAL-TIME AI REMEDIES & ACTIONS LIST */}
+                <div className="space-y-3">
+                  <h4 className="text-white/40 text-[10px] font-mono font-bold uppercase tracking-widest pl-1">ยารักษาจุดอ่อนและคำแนะนำพฤติกรรม (AI Prescribed Interventions)</h4>
+                  <div className="space-y-2">
+                    {aiRecommendations.map((rec, i) => (
+                      <div key={i} className="bg-[#121422] p-4 rounded-2.5xl border border-violet-500/15 flex justify-between items-center hover:bg-violet-950/10 cursor-pointer active:scale-99 transition-all">
+                        <div className="flex gap-3 items-center">
+                          <div className="p-2 bg-violet-600/10 text-violet-400 rounded-xl">
+                            <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                          </div>
+                          <div>
+                            <span className="text-[11.5px] text-white font-bold block">{rec}</span>
+                            <span className="text-[9px] text-white/45 block">เชื่อมต่อระบบบทเรียนแฝงและคลื่นช่วยสมาธิโดยตรง</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-white/30" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </div>
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -2020,7 +2409,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
             <div className="grid grid-cols-3 gap-2 mb-6">
               {[
                 { id: 'credentials', label: 'Micro-Credentials', icon: ShieldCheck, color: 'text-amber-400' },
-                { id: 'passport', label: 'Skill Passport', icon: Award, color: 'text-indigo-400' },
+                { id: 'passport', label: 'Uni-Matching', icon: Award, color: 'text-indigo-400' },
                 { id: 'l2e', label: 'L2E rewards', icon: Coins, color: 'text-rose-400' }
               ].map(tab => {
                 const TabIcon = tab.icon;
@@ -2138,19 +2527,19 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                 </div>
               )}
 
-              {/* TAB 2: SKILLS PASSPORT & JOB MATCHING LINKEDIN SYSTEM */}
+              {/* TAB 2: UNIVERSITY & FACULTY PORTFOLIO MATCHING SYSTEM */}
               {blockchainTab === 'passport' && (
                 <div className="space-y-6">
                   <div className="bg-indigo-500/10 p-5 rounded-3xl border border-indigo-500/20 space-y-1">
-                    <h4 className="text-indigo-400 font-bold text-xs">Skill Passport: เชื่อมโยงระบบตลาดงาน</h4>
-                    <p className="text-[11px] text-white/60">กระจายทักษะพอร์ตสะสมของคุณตรงกับสากลโดยอ้างอิงคุณสมบัติจำลองของ LinkedIn API เพื่อจับคู่โอกาสบริษัททั่วโลก</p>
+                    <h4 className="text-indigo-400 font-bold text-xs">University Matching: ระบบสืบค้นและจับคู่มหาวิทยาลัยอัจฉริยะ</h4>
+                    <p className="text-[11px] text-white/60">วิเคราะห์สาระสำคัญ แฟ้มสะสมผลงาน (Web3 Portfolio) และประวัติตราเกียรติบัตรบนบล็อกเชนเพื่อประเมินความสอดคล้องกับคณะและสาขาในมหาวิทยาลัยชั้นนำ</p>
                   </div>
 
                   {/* Personal Skills attributes visual */}
                   <div className="bg-white/5 border border-white/15 p-4 rounded-2.5xl space-y-3">
                     <div className="flex justify-between text-xs">
-                      <span className="text-white font-bold">ทักษะสะสมหลักของ Alex Universe</span>
-                      <span className="text-indigo-300 font-mono text-[9px]">Verified on Chains</span>
+                      <span className="text-white font-bold">ทักษะสะสมหลักเพื่อสอบเข้าศึกษาต่อของ Alex Universe</span>
+                      <span className="text-indigo-300 font-mono text-[9px]">Academic Core Ready</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {['Quantum Electrodynamics', 'Vector Calculus', 'Data Structures (โครงสร้างข้อมูล)', 'AI Adaptive Core', 'React TS Engine'].map((skill, i) => (
@@ -2161,38 +2550,56 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                     </div>
                   </div>
 
-                  {/* Jobs listings simulated matching */}
+                  {/* Universities listings matching */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pl-1">
-                      <h5 className="text-white/40 text-[10px] uppercase font-bold tracking-widest font-mono">สิทธิ์ตำแหน่งจับคู่ผ่าน API (Simulated LinkedIn API Matches)</h5>
-                      <span className="text-[8px] text-emerald-400 font-mono font-bold animate-pulse">● API SYNCED</span>
+                      <h5 className="text-white/40 text-[10px] uppercase font-bold tracking-widest font-mono">คณะและหลักสูตรแนะนำที่เข้าเกณฑ์ (AI Recommended Academic Pathways)</h5>
+                      <span className="text-[8px] text-emerald-400 font-mono font-bold animate-pulse">● PORTFOLIO MATCHED</span>
                     </div>
 
                     <div className="space-y-2">
                       {[
-                        { title: "Quantum Computing Intern", company: "Swiss Quantum Tech Labs (Zürich)", rate: "95%", req: "Quantum Physics, CS Math", salary: "CHF 4,200/mo" },
-                        { title: "Junior DB Architecture Assistant", company: "Singapore Fintech Ledger Corp", rate: "88%", req: "Data Structures, Database Models", salary: "SGD 5,500/mo" },
-                        { title: "Cognitive Learning Design Intern", company: "Silicon Valley AI Innovations", rate: "82%", req: "AI Adaptive Core, React Architecture", salary: "USD 6,000/mo" }
-                      ].map((job, idx) => (
+                        { 
+                          faculty: "คณะวิทยาศาสตร์ สาขาวิชาคณิตศาสตร์ประยุกต์และวิทยาการคอมพิวเตอร์", 
+                          university: "จุฬาลงกรณ์มหาวิทยาลัย (Chulalongkorn University)", 
+                          rate: "96%", 
+                          req: "Vector Calculus, Data Structures (โครงสร้างข้อมูล)", 
+                          quota: "TCAS รอบที่ 1: โครงการอัจฉริยภาพทางวิทยาการคอมพิวเตอร์" 
+                        },
+                        { 
+                          faculty: "คณะวิทยาศาสตร์ สาขาวิชาฟิสิกส์ทฤษฎีและฟิสิกส์ควอนตัมชั้นสูง", 
+                          university: "มหาวิทยาลัยมหิดล (Mahidol University)", 
+                          rate: "92%", 
+                          req: "Quantum Electrodynamics, Vector Calculus", 
+                          quota: "TCAS รอบที่ 1: ทุนพัฒนาผู้มีความสามารถพิเศษทางวิทยาศาสตร์ (พสวท.)" 
+                        },
+                        { 
+                          faculty: "คณะวิศวกรรมศาสตร์ สาขาวิศวกรรมปัญญาประดิษฐ์และนวัตกรรมระบบควบคุม", 
+                          university: "สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง (KMITL)", 
+                          rate: "88%", 
+                          req: "AI Adaptive Core, React TS Engine", 
+                          quota: "TCAS รอบที่ 1: โครงการช้างเผือกนวัตกรบล็อกเชนและปัญญาประดิษฐ์" 
+                        }
+                      ].map((uni, idx) => (
                         <div key={idx} className="bg-white/5 p-4 rounded-2.5xl border border-white/15 space-y-3">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="text-white text-xs font-bold leading-snug">{job.title}</h4>
-                              <p className="text-[10px] text-white/55">{job.company}</p>
+                              <h4 className="text-white text-xs font-bold leading-snug">{uni.faculty}</h4>
+                              <p className="text-[10px] text-white/55">{uni.university}</p>
                             </div>
-                            <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/15 border border-indigo-500/25 px-2 py-0.5 rounded-lg">{job.rate} Match</span>
+                            <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/15 border border-indigo-500/25 px-2 py-0.5 rounded-lg">{uni.rate} Match</span>
                           </div>
 
                           <div className="flex justify-between items-center text-[9px] text-white/40 font-mono pt-1.5 border-t border-white/5">
-                            <span>Requires: {job.req}</span>
-                            <span className="text-emerald-400 font-bold">{job.salary}</span>
+                            <span>Requires: {uni.req}</span>
+                            <span className="text-rose-400 font-bold">{uni.quota}</span>
                           </div>
 
                           <button 
-                            onClick={() => alert(`📩 ส่งมอบ Skill Passport บันทึกบนเชนสมัครตำแหน่ง ${job.title} ไปยังระบบประมวลผล LinkedIn API จำลองเรียบร้อย!`)}
+                            onClick={() => showToast(`📩 ยื่นแฟ้มสะสมผลงาน (Web3 Portfolio) เพื่อพิจารณาโควตากับ ${uni.university} สำเร็จแล้ว!`)}
                             className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold font-sans cursor-pointer uppercase tracking-wider"
                           >
-                            ส่งใบสมัครงานพร้อมประวัติบล็อกเชน (Apply)
+                            ยื่นพอร์ตโฟลิโอดิจิทัลส่งสัญญาจำลอง (Submit Web3 Portfolio)
                           </button>
                         </div>
                       ))}
@@ -2244,7 +2651,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                             summary = `ALEX UNIVERSE - OFFICIAL EXECUTIVE BIOGRAPHY\nAddress: Registered Core Campus Network\nSpecializations: Applied Mathematical Physics and Large-scale Data Architectures\nAcademic Credentials: Fully minted on the Blockchain Ledger for supreme integrity\nInteractions: Completed PISA, Clinical Consultations, and offsite internships.`;
                           }
                           setGeneratedPortfolio(summary);
-                          alert("🎉 AI Portfolio Template compiled successfully with custom styles!");
+                          showToast("🎉 AI Portfolio Template compiled successfully with custom styles!");
                         }, 1300);
                       }}
                       className="w-full py-3 bg-violet-600 hover:bg-violet-550 text-white font-bold rounded-xl text-xs uppercase cursor-pointer"
@@ -2259,7 +2666,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                           {generatedPortfolio}
                         </pre>
                         <button 
-                          onClick={() => alert("💾 ดาวน์โหลดเอกสารและส่งต่อ LinkedIn / อีเมลของคุณแล้ว ความปลอดภัยสมบูรณ์!")}
+                          onClick={() => showToast("💾 ดาวน์โหลดเอกสารและส่งต่อ LinkedIn / อีเมลของคุณแล้ว!")}
                           className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
                         >
                           Export to Digital Wallet / Sign Web3 PDF
@@ -2308,16 +2715,16 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                             <button
                               onClick={() => {
                                 if (isClaimed) {
-                                  alert("คุณแลกเกียรติบัตร/สิทธิ์ตัวนี้เรียบร้อยแล้ว!");
+                                  showToast("คุณแลกเกียรติบัตร/สิทธิ์ตัวนี้เรียบร้อยแล้ว!");
                                   return;
                                 }
                                 if (!hasAfforded) {
-                                  alert(`โทเคนเหรียญสะสมไม่เพียงพอ! ขาดอีก ${item.cost - coins} Coins เพื่อแลกสิทธิ์ตัวนี้ ทำแบบประเมินหรือคลังฟิสิกส์เพื่อเร่งสะสมได้!`);
+                                  showToast(`โทเคนเหรียญสะสมไม่เพียงพอ! ขาดอีก ${item.cost - coins} Coins เพื่อแลกสิทธิ์ตัวนี้`);
                                   return;
                                 }
                                 setCoins(c => c - item.cost);
                                 setBoughtItems(arr => [...arr, item.id]);
-                                alert(`🎉 ขอแสดงความยินดี! แลกรับของรางวัลสำเร็จ!\n\n[ระบบทำการจารึกตราสัญลักษณ์ประวัติเกียรติประวัติของคุณ ด้วย Transaction Signature และส่งเอกสารทางการถึงหน้ากระดานดาวบอร์ดสำเร็จ]`);
+                                showToast(`🎉 แลกรับของรางวัลสำเร็จ! ระบบลงตราประทับบล็อกเชนเรียบร้อย!`);
                               }}
                               className={`w-full py-2.5 rounded-xl text-[10px] font-bold font-sans cursor-pointer uppercase transition-colors ${
                                 isClaimed
@@ -2461,28 +2868,72 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                 <div className="absolute inset-0 bg-radial from-blue-500/5 to-transparent pointer-events-none" />
               </div>
 
+              {/* Quick Category Tab Filters (สมาคมคณิตศาสตร์, บทความ, วารสาร, AI, สิ่งแวดล้อม) */}
+              <div className="space-y-2">
+                <span className="text-[10px] text-white/40 font-mono block">เลือกคัดกรองหมวดหมู่คลังข้อมูลหลัก (Main Academic Categories)</span>
+                <div className="grid grid-cols-4 gap-1.5 p-1 bg-white/5 border border-white/5 rounded-2xl">
+                  {[
+                    { id: 'all', label: 'ทั้งหมด (All)', badge: `${RESEARCH_PAPERS.length}` },
+                    { id: 'math', label: 'สมาคมคณิตศาสตร์', badge: `${RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("math"))).length}` },
+                    { id: 'ai', label: 'วิทยาการคำนวณ & AI', badge: `${RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("ai") || t.toLowerCase().includes("algorithm") || t.toLowerCase().includes("blockchain") || t.toLowerCase().includes("data architecture"))).length}` },
+                    { id: 'climate', label: 'สิ่งแวดล้อม & โลกร้อน', badge: `${RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("climate") || t.toLowerCase().includes("ecological") || t.toLowerCase().includes("mitigation") || t.toLowerCase().includes("marine"))).length}` }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setResearchCategory(cat.id as any);
+                        handleSemanticSearch(undefined, cat.id as any);
+                      }}
+                      className={`py-2 px-1 text-[9.5px] font-bold rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        researchCategory === cat.id 
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                          : 'text-white/50 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <span>{cat.label}</span>
+                      <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full ${
+                        researchCategory === cat.id ? 'bg-white/25 text-white' : 'bg-white/10 text-white/60'
+                      }`}>
+                        {cat.badge}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Quick Preset Query Tags */}
               <div className="space-y-1.5">
-                <span className="text-[10px] text-white/40 font-mono block">สลักค้นหาหัวข้อด่วน (Quick Search Presets)</span>
+                <span className="text-[10px] text-white/40 font-mono block">สลักค้นหาหัวข้อด่วน (Quick Search Presets & Journals)</span>
                 <div className="flex flex-wrap gap-1.5">
                   {[
-                    "Data Architecture", "Blockchain", "Binary Trees", "Algorithms", "Hash-Maps", "Cognitive Learning"
+                    "Mathematics", "Math Association", "Thai Journal of Mathematics", "วารสารคณิตศาสตร์", "AI Core", "Binary Trees", "Algorithms", "Climate Change"
                   ].map((tag) => (
                     <button
                       key={tag}
                       type="button"
                       onClick={() => {
                         setSearchQuery(tag);
-                        setFilteredPapers(RESEARCH_PAPERS.filter(p => 
-                          p.title.toLowerCase().includes(tag.toLowerCase()) || 
-                          p.abstract.toLowerCase().includes(tag.toLowerCase()) ||
-                          p.tags.some(t => t.toLowerCase().includes(tag.toLowerCase()))
-                        ));
-                        setSearchFeedback(`Semantic database resolved ${RESEARCH_PAPERS.filter(p => 
-                          p.title.toLowerCase().includes(tag.toLowerCase()) || 
-                          p.abstract.toLowerCase().includes(tag.toLowerCase()) ||
-                          p.tags.some(t => t.toLowerCase().includes(tag.toLowerCase()))
-                        ).length} matches for "${tag}" tag`);
+                        // Trigger search with updated query
+                        setTimeout(() => {
+                          const q = tag.toLowerCase();
+                          let pool = RESEARCH_PAPERS;
+                          if (researchCategory === 'math') {
+                            pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("math")));
+                          } else if (researchCategory === 'ai') {
+                            pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("ai") || t.toLowerCase().includes("algorithm") || t.toLowerCase().includes("blockchain") || t.toLowerCase().includes("data architecture")));
+                          } else if (researchCategory === 'climate') {
+                            pool = RESEARCH_PAPERS.filter(p => p.tags.some(t => t.toLowerCase().includes("climate") || t.toLowerCase().includes("ecological") || t.toLowerCase().includes("mitigation") || t.toLowerCase().includes("marine")));
+                          }
+                          const results = pool.filter(p => 
+                            p.title.toLowerCase().includes(q) || 
+                            p.abstract.toLowerCase().includes(q) || 
+                            p.journal.toLowerCase().includes(q) || 
+                            p.tags.some(t => t.toLowerCase().includes(q))
+                          );
+                          setFilteredPapers(results);
+                          setSearchFeedback(`ผลการค้นหาหัวข้อด่วน: พบ ${results.length} รายการสำหรับคุณลักษณะ "${tag}"`);
+                        }, 50);
                       }}
                       className="px-3 py-1 bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-white/70 hover:text-white rounded-lg text-[9px] font-mono border border-white/5 cursor-pointer"
                     >
@@ -2492,23 +2943,23 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                 </div>
               </div>
             </div>
-
-            {/* Fuzzy Input Form */}
-            <form onSubmit={handleSemanticSearch} className="flex gap-2 mb-4">
-              <input 
-                type="text" 
-                placeholder="Search quantum, climate change, marine, data architecture..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-white/5 p-4 rounded-2xl text-xs text-white border border-white/10 focus:outline-none"
-              />
-              <button 
-                type="submit"
-                className="px-5 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-bold uppercase text-white cursor-pointer"
-              >
-                Search
-              </button>
-            </form>
+ 
+             {/* Fuzzy Input Form */}
+             <form onSubmit={handleSemanticSearch} className="flex gap-2 mb-4">
+               <input 
+                 type="text" 
+                 placeholder="ค้นหางานวิจัย, วารสารสมาคม, ชื่อผู้สั่งพิมพ์, ดัชนี DOI (เช่น Thai Journal, Quantum, Riemann, Somsak)..." 
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 className="flex-1 bg-white/5 p-4 rounded-2xl text-xs text-white border border-white/10 focus:outline-none"
+               />
+               <button 
+                 type="submit"
+                 className="px-5 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-bold uppercase text-white cursor-pointer"
+               >
+                 ค้นหา
+               </button>
+             </form>
 
             {searchFeedback && (
               <div className="mb-4 text-[10px] text-emerald-400 font-mono pl-1">{searchFeedback}</div>
@@ -2516,11 +2967,22 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
 
             <div className="flex-1 overflow-y-auto space-y-4 pb-12 scrollbar-hide pr-1">
               {filteredPapers.map(paper => (
-                <div key={paper.id} className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3 hover:bg-white/10 transition-colors">
+                <div 
+                  key={paper.id} 
+                  onClick={() => {
+                    setSelectedResearchPaper(paper);
+                    setResearchDownloadProgress(0);
+                    setIsResearchDownloading(false);
+                  }}
+                  className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3 hover:bg-gradient-to-r hover:from-blue-900/10 hover:to-violet-900/10 hover:border-blue-500/30 cursor-pointer active:scale-98 group transition-all duration-200"
+                >
                   <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-mono font-bold uppercase">{paper.ranking} • {paper.journal}</span>
-                      <h4 className="text-white text-xs font-black mt-2 leading-tight">{paper.title}</h4>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-mono font-bold uppercase">{paper.ranking} • {paper.journal}</span>
+                        <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">FREE OPEN ACCESS</span>
+                      </div>
+                      <h4 className="text-white text-xs font-bold leading-tight group-hover:text-blue-300 transition-colors">{paper.title}</h4>
                     </div>
                     <span className="text-[10px] text-white/30 font-mono">#{paper.year}</span>
                   </div>
@@ -2533,12 +2995,242 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                     ))}
                   </div>
 
-                  <div className="flex justify-between text-[10px] text-white/40 pt-2 border-t border-white/5 font-mono">
-                    <span>Impact Factor: {paper.impactFactor}</span>
-                    <span>Citations: {paper.citations}</span>
+                  <div className="flex justify-between items-center text-[10.5px] text-white/40 pt-2 border-t border-white/5 font-mono">
+                    <div className="flex gap-4">
+                      <span>Impact Factor: {paper.impactFactor}</span>
+                      <span>อ้างอิง: {paper.citations} ครั้ง</span>
+                    </div>
+                    <span className="text-blue-450 text-blue-400 font-bold group-hover:translate-x-1.5 transition-transform flex items-center gap-1 text-[10px]">
+                      คลิกเปิดอ่านฉบับเต็ม ➜
+                    </span>
                   </div>
                 </div>
               ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* WEB3 ACADEMIC RESEARCH VIEWER MODULE */}
+      <AnimatePresence>
+        {selectedResearchPaper && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            exit={{ opacity: 0, scale: 0.95 }} 
+            className="fixed inset-0 z-[60] bg-[#0A0A0A]/95 backdrop-blur-3xl p-6 md:p-10 flex items-center justify-center"
+          >
+            <div className="bg-[#121624] border border-blue-500/20 rounded-[2.5rem] w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl relative">
+              
+              {/* Header section with academic metadata */}
+              <div className="bg-gradient-to-r from-blue-950/45 via-[#121624] to-[#121624] p-6 border-b border-white/10 flex justify-between items-start gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-mono font-bold tracking-wider">{selectedResearchPaper.ranking}</span>
+                    <span className="text-[9px] bg-white/5 text-blue-400 border border-white/10 px-2 py-0.5 rounded-full font-mono">{selectedResearchPaper.journal}</span>
+                    <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">Free Online Paper</span>
+                  </div>
+                  <h3 className="text-base md:text-lg font-bold text-white tracking-tight leading-snug">{selectedResearchPaper.title}</h3>
+                  <p className="text-[11px] text-white/50">เขียนโดย: <span className="text-blue-300 font-medium">{selectedResearchPaper.authors}</span> · ปีพิมพ์ {selectedResearchPaper.year}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedResearchPaper(null);
+                    setResearchDownloadProgress(0);
+                    setIsResearchDownloading(false);
+                  }}
+                  className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5 text-white" />
+                </button>
+              </div>
+
+              {/* Multi-Pane Reading Body */}
+              <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+                {/* Left pane: Administrative & Metric Tools */}
+                <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-white/10 p-5 space-y-5 bg-black/25 overflow-y-auto scrollbar-hide">
+                  <div className="space-y-4">
+                    <div className="bg-blue-950/20 p-4 rounded-2xl border border-blue-500/10 space-y-2">
+                      <h4 className="text-blue-400 text-[10px] font-bold uppercase tracking-wider font-mono">เอกสารอ้างอิงและดัชนีคุณค่า</h4>
+                      <div className="grid grid-cols-2 gap-2 text-center text-white mt-1">
+                        <div className="bg-white/5 p-2 rounded-xl">
+                          <div className="text-[10px] text-white/40 font-medium">Impact Factor</div>
+                          <div className="text-xs font-mono font-bold text-blue-300">{selectedResearchPaper.impactFactor}</div>
+                        </div>
+                        <div className="bg-white/5 p-2 rounded-xl">
+                          <div className="text-[10px] text-white/40 font-medium">การอ้างอิง (Citations)</div>
+                          <div className="text-xs font-mono font-bold text-emerald-400">{selectedResearchPaper.citations}</div>
+                        </div>
+                      </div>
+                      <div className="text-[9.5px] text-white/45 pl-1 leading-snug pt-1">
+                        *ข้อมูลอัพเดทจำลองเรียลไทม์บันทึกบน Ethereum Academic Network เรียบร้อยแล้ว
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pl-1">
+                      <span className="text-[10px] text-white/30 font-mono uppercase font-bold tracking-widest block">รหัสดิจิทัล DOI</span>
+                      <div className="bg-white/5 px-3 py-2 rounded-xl text-[10px] font-mono text-white/70 overflow-hidden text-ellipsis border border-white/5 select-all">
+                        https://doi.org/{selectedResearchPaper.doi}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] text-white/30 font-mono uppercase font-bold tracking-widest pl-1 block">หน้าเพจของงานวิจัยจริง (Click to Open Real Paper)</span>
+                      <a
+                        href={selectedResearchPaper.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between w-full px-4 py-3 bg-blue-500/25 hover:bg-blue-500/40 text-blue-200 hover:text-white rounded-xl border border-blue-500/40 transition-all font-sans text-[11px] font-semibold cursor-pointer group"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Microscope className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                          <span>เปิดดูสิ่งตีพิมพ์งานวิจัยฉบับเต็มจริง ↗</span>
+                        </span>
+                        <ExternalLink className="w-4 h-4 opacity-75 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    </div>
+
+                    {/* Simulating Full text PDF Download directly */}
+                    <div className="bg-gradient-to-b from-[#18121a] to-black/30 p-4.5 rounded-2.5xl border border-rose-500/10 space-y-3">
+                      <h4 className="text-[10px] text-rose-400 font-bold uppercase tracking-wider font-mono flex items-center gap-1">
+                        <Download className="w-3.5 h-3.5" /> PDF Document Repository
+                      </h4>
+                      <p className="text-[10px] text-white/60 leading-normal">
+                        ดาวน์โหลดยืนยันจัดเก็บเอกสารฉบับนี้ไปยัง Digital Wallet ส่วนบุคคลโดยไม่ต้องเสียค่าใช้จ่ายใดๆ
+                      </p>
+
+                      {isResearchDownloading ? (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex justify-between text-[9px] font-mono text-rose-300">
+                            <span>กำลังเข้ารหัสและดาวน์โหลด...</span>
+                            <span>{researchDownloadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-rose-500 h-full transition-all duration-100 ease-out" 
+                              style={{ width: `${researchDownloadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : researchDownloadProgress === 100 ? (
+                        <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-center space-y-1">
+                          <span className="text-[10px] font-bold text-emerald-400 block font-mono">✓ ดาวน์โหลดสมบูรณ์</span>
+                          <span className="text-[8px] text-white/50 block font-mono">Hash SHA-256 Verfied!</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setIsResearchDownloading(true);
+                            setResearchDownloadProgress(0);
+                            const interval = setInterval(() => {
+                              setResearchDownloadProgress(p => {
+                                if (p >= 100) {
+                                  clearInterval(interval);
+                                  setIsResearchDownloading(false);
+                                  return 100;
+                                }
+                                return p + 10;
+                              });
+                            }, 150);
+                          }}
+                          className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider cursor-pointer"
+                        >
+                          Download Free Full Paper (PDF)
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Paper Inter-links (Cited By) */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-white/30 font-mono uppercase font-bold tracking-widest pl-1">ลิงก์บทความที่โยงอ้างอิงกัน</span>
+                      <div className="space-y-1.5">
+                        {RESEARCH_PAPERS.filter(p => !p.citedBy.includes(selectedResearchPaper.id) && p.id !== selectedResearchPaper.id).slice(0, 2).map(linked => (
+                          <button
+                            key={linked.id}
+                            onClick={() => {
+                              setSelectedResearchPaper(linked);
+                              setResearchDownloadProgress(0);
+                              setIsResearchDownloading(false);
+                            }}
+                            className="w-full bg-white/5 hover:bg-white/10 p-2 text-[10.5px] rounded-xl text-left text-white font-medium border border-white/5 line-clamp-1 transition-colors"
+                          >
+                            📁 {linked.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right pane: Document full-text reading sections */}
+                <div className="lg:col-span-8 p-6 overflow-y-auto space-y-6 scrollbar-hide bg-[#0c0e17]/40 leading-relaxed font-sans text-xs">
+                  {/* Executive abstract block */}
+                  <div className="bg-blue-500/5 border border-blue-500/10 p-5 rounded-2.5xl space-y-2">
+                    <span className="text-[10px] text-blue-400 font-bold font-mono tracking-widest uppercase pl-0.5">บทคัดย่อ (ABSTRACT)</span>
+                    <p className="text-white/80 leading-relaxed italic text-[11px]">{selectedResearchPaper.abstract}</p>
+                  </div>
+
+                  {/* Document sections */}
+                  <div className="space-y-4 text-white/80">
+                    <div className="space-y-2">
+                      <h4 className="text-white font-bold text-xs flex items-center gap-1.5 text-blue-300">
+                        <span className="text-[10px] font-mono text-blue-500 bg-blue-500/10 w-4 h-4 rounded-full flex items-center justify-center font-bold">1</span>
+                        บทนำ (INTRODUCTION)
+                      </h4>
+                      <p className="pl-5 text-white/70 text-[11px] leading-relaxed">
+                        {selectedResearchPaper.introduction || "This section describes the foundations of our inquiry, mapping physical observations with theoretical microstructures compiled at high fidelity."}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-white font-bold text-xs flex items-center gap-1.5 text-blue-300">
+                        <span className="text-[10px] font-mono text-blue-500 bg-blue-500/10 w-4 h-4 rounded-full flex items-center justify-center font-bold">2</span>
+                        ระเบียบวิธีวิจัย (METHODOLOGY)
+                      </h4>
+                      <p className="pl-5 text-white/70 text-[11px] leading-relaxed">
+                        {selectedResearchPaper.methodology || "To obtain systematic telemetry, multi-sensor calibration parameters were logged on the decentralized laboratory database and balanced to O(log N) state retrieval."}
+                      </p>
+                    </div>
+
+                    {/* Inline simulation of data tables / results to satisfy visual expectations */}
+                    <div className="pl-5 py-2">
+                      <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3 font-mono text-[9px] text-white/60">
+                        <span className="text-[8px] text-blue-400 font-bold block">TABLE 1.0: OPTIMAL OUTCOMES & METRIC DEVIATION FACTORS</span>
+                        <div className="border-t border-white/10 pt-2 grid grid-cols-3 gap-2 font-bold text-white uppercase text-[8px]">
+                          <span>Epoch Step</span>
+                          <span>Comprehension Index</span>
+                          <span>Coherence %</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-3 gap-2"><span>Step #10</span><span>74.2%</span><span className="text-emerald-400 font-bold">98.42%</span></div>
+                          <div className="grid grid-cols-3 gap-2"><span>Step #50</span><span>86.5%</span><span className="text-emerald-400 font-bold">99.11%</span></div>
+                          <div className="grid grid-cols-3 gap-2"><span>Step #100</span><span>94.9%</span><span className="text-emerald-400 font-bold">99.88%</span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-white font-bold text-xs flex items-center gap-1.5 text-blue-300">
+                        <span className="text-[10px] font-mono text-blue-500 bg-blue-500/10 w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
+                        ผลลัพธ์การวิจัย (RESULTS)
+                      </h4>
+                      <p className="pl-5 text-white/70 text-[11px] leading-relaxed">
+                        {selectedResearchPaper.results || "The outcome vectors validated our hypothesis, demonstrating strong positive core retention scales with lower overall cognitive stress indicators."}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-white font-bold text-xs flex items-center gap-1.5 text-blue-300">
+                        <span className="text-[10px] font-mono text-blue-500 bg-blue-500/10 w-4 h-4 rounded-full flex items-center justify-center font-bold">4</span>
+                        บทสรุปวิจัย (CONCLUSION)
+                      </h4>
+                      <p className="pl-5 text-white/70 text-[11px] leading-relaxed mb-6">
+                        {selectedResearchPaper.conclusion || "Ultimately, standard deployment of microstructures on active classrooms yields excellent continuous development pathways without structural overhead constraints."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -2578,7 +3270,7 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
                   <span className="text-[10px] text-emerald-400 font-mono">Booked (May 28)</span>
                 </div>
                 <button 
-                  onClick={() => alert("📅 Mental health counselling request slot locked in for next Thursday. Automated calendar alert sent.")}
+                  onClick={() => showToast("📅 Mental health counselling request slot locked in for next Thursday. Automated calendar alert sent.")}
                   className="w-full py-3 bg-emerald-600 text-white font-bold text-xs uppercase rounded-xl"
                 >
                   Book Counselling Session
@@ -2643,8 +3335,23 @@ export default function StudentDashboard({ onLogout }: { onLogout: () => void })
           <Sparkles className="w-5 h-5 text-white" />
         </div>
         <button onClick={() => setIsCalendarOpen(true)} className="p-2 text-white/40 cursor-pointer"><Calendar className="w-6 h-6" /></button>
-        <button onClick={() => alert("Settings toggled! Educational profile matches system default standards.")} className="p-2 text-white/40 cursor-pointer"><Settings className="w-6 h-6" /></button>
+        <button onClick={() => showToast("⚙️ Configuration synced: Web3 & AI Profiles optimal.")} className="p-2 text-white/40 cursor-pointer"><Settings className="w-6 h-6" /></button>
       </div>
+
+      {/* Dynamic Toast System */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="absolute bottom-24 left-6 right-6 bg-gradient-to-r from-rose-600 to-pink-600 text-white p-3.5 rounded-xl border border-rose-450/30 text-xs font-semibold shadow-2xl z-[999] flex items-center gap-2.5"
+          >
+            <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

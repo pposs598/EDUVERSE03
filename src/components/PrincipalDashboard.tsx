@@ -30,6 +30,14 @@ const FeatureItem = ({ icon: Icon, label, color, onClick }: any) => (
 
 export default function PrincipalDashboard({ onLogout }: { onLogout: () => void }) {
   // Navigation modals
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
+
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
   const [isLessonOpen, setIsLessonOpen] = useState(false);
@@ -374,13 +382,28 @@ export default function PrincipalDashboard({ onLogout }: { onLogout: () => void 
       {/* Bottom Nav spacer */}
       <div className="absolute bottom-6 left-6 right-6 h-16 bg-white/10 backdrop-blur-2xl rounded-2xl border border-white/10 flex items-center justify-around px-4 shadow-2xl">
         <button className="p-2 text-orange-500 cursor-pointer"><LayoutDashboard className="w-6 h-6" /></button>
-        <button className="p-2 text-white/40 cursor-pointer" onClick={() => alert("Connecting direct secure chat channel to Advisor...")}><MessageSquare className="w-6 h-6" /></button>
+        <button className="p-2 text-white/40 cursor-pointer" onClick={() => showToast("📞 Connecting direct secure chat channel to Advisor...")}><MessageSquare className="w-6 h-6" /></button>
         <div className="w-12 h-12 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-full flex items-center justify-center -translate-y-6 shadow-xl border-4 border-[#0A0A0A]">
           <Sparkles className="w-5 h-5 text-white" />
         </div>
         <button className="p-2 text-white/40 cursor-pointer" onClick={() => setIsStatsOpen(true)}><BarChart3 className="w-6 h-6" /></button>
-        <button onClick={() => alert("Settings toggled! Educational profile matches system default standards.")} className="p-2 text-white/40 cursor-pointer"><Settings className="w-6 h-6" /></button>
+        <button onClick={() => showToast("⚙️ Configurations verified with Ministry core server.")} className="p-2 text-white/40 cursor-pointer"><Settings className="w-6 h-6" /></button>
       </div>
+
+      {/* Dynamic Toast System */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="absolute bottom-24 left-6 right-6 bg-gradient-to-r from-orange-600 to-amber-600 text-white p-3.5 rounded-xl border border-orange-450/30 text-xs font-semibold shadow-2xl z-[999] flex items-center gap-2.5"
+          >
+            <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

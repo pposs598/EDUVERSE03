@@ -31,7 +31,16 @@ const FeatureItem = ({ icon: Icon, label, color, onClick }: any) => (
 
 export default function ParentDashboard({ onLogout }: { onLogout: () => void }) {
   // Navigation states
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
+
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [attendanceViewTab, setAttendanceViewTab] = useState<'daily' | 'semester'>('daily');
   const [isHomeworkOpen, setIsHomeworkOpen] = useState(false);
   const [isNewsOpen, setIsNewsOpen] = useState(false);
   const [isConductOpen, setIsConductOpen] = useState(false);
@@ -122,7 +131,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
   const handleTopup = (amount: number) => {
     setBalance(prev => prev + amount);
-    alert(`Success: topped up ฿${amount}. Sync completed!`);
+    showToast(`Success: topped up ฿${amount}. Sync completed!`);
   };
 
   const updateLimit = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,27 +259,199 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       {/* 1. ATTENDANCE TRAIL */}
       <AnimatePresence>
         {isAttendanceOpen && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 z-50 bg-[#0A0A0A] p-8 flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3"><Clock className="w-6 h-6 text-teal-500" /> Arrival & Departure logs</h3>
-              <button onClick={() => setIsAttendanceOpen(false)} className="p-2 bg-white/5 rounded-full cursor-pointer"><ArrowLeft className="w-6 h-6 text-white" /></button>
-            </div>
-            <div className="space-y-6 overflow-y-auto scrollbar-hide pb-12">
-              <div className="space-y-2">
-                {[
-                  { title: "Alex Universe entered Gate 2", time: "Today, 07:44 AM", status: "Gate check on-time" },
-                  { title: "Alex Universe exited Campus Gate", time: "Yesterday, 04:12 PM", status: "Normal dismiss" },
-                  { title: "Alex Universe entered Gate 1", time: "Yesterday, 08:12 AM", status: "Late entry logged" }
-                ].map((note, index) => (
-                  <div key={index} className="bg-white/5 p-4 rounded-2.5xl border border-white/5 flex justify-between items-center">
-                    <div>
-                      <h4 className="text-white text-xs font-bold">{note.title}</h4>
-                      <p className="text-[9px] text-white/45">{note.time}</p>
-                    </div>
-                    <span className="text-[9px] text-emerald-400 font-mono font-bold uppercase tracking-wider">{note.status}</span>
-                  </div>
-                ))}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 z-50 bg-[#0A0A0A] p-6 flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <Clock className="w-6 h-6 text-teal-400 animate-pulse" />
+                <div>
+                  <h3 className="text-xl font-bold text-white">Student Arrival & Departure Center</h3>
+                  <p className="text-[10px] text-teal-400 font-mono font-bold uppercase tracking-wider leading-none">รายงานพฤติกรรมการเข้าเรียนและสรุปการมาเรียนทั้งเทอมของบุตรหลาน</p>
+                </div>
               </div>
+              <button onClick={() => setIsAttendanceOpen(false)} className="p-2 bg-white/5 rounded-full cursor-pointer hover:bg-white/10 transition-colors"><ArrowLeft className="w-5 h-5 text-white" /></button>
+            </div>
+
+            {/* Attendance Toggle View Tabs */}
+            <div className="grid grid-cols-2 gap-2 mb-6 bg-white/5 p-1 rounded-2xl border border-white/5 max-w-md mx-auto w-full select-none">
+              <button 
+                onClick={() => setAttendanceViewTab('daily')}
+                className={`py-2 text-[10.5px] font-bold rounded-xl transition-all cursor-pointer ${attendanceViewTab === 'daily' ? 'bg-teal-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+              >
+                บันทึกการสแกนเข้า-ออกล่าสุด
+              </button>
+              <button 
+                onClick={() => setAttendanceViewTab('semester')}
+                className={`py-2 text-[10.5px] font-bold rounded-xl transition-all cursor-pointer ${attendanceViewTab === 'semester' ? 'bg-teal-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+              >
+                สรุปสถิติมารุ่นทั้งเทอม
+              </button>
+            </div>
+
+            <div className="space-y-6 flex-1 max-w-4xl mx-auto w-full select-none pb-12">
+              
+              {attendanceViewTab === 'daily' ? (
+                <div className="space-y-4">
+                  {/* Summary Rate */}
+                  <div className="bg-gradient-to-br from-teal-950 to-slate-900 border border-teal-500/20 p-5 rounded-3xl text-center">
+                    <span className="text-[10px] uppercase text-teal-400 tracking-widest font-mono font-bold block mb-1">ภาพรวมการมาเรียนสัปดาห์นี้</span>
+                    <span className="text-4xl font-mono text-white font-black">98.5%</span>
+                    <span className="text-[11px] text-white/50 block mt-1">ตรงตามประกาศกฎโรงเรียน และลงเกียรติประวัติเรียบร้อย</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {[
+                      { title: "Alex Universe entered Gate 2 (ประตูหลัก)", time: "Today, 07:44 AM", status: "Gate check on-time", col: "text-emerald-400" },
+                      { title: "Alex Universe exited Campus Gate (เลิกเรียน)", time: "Yesterday, 04:12 PM", status: "Normal dismiss", col: "text-teal-400" },
+                      { title: "Alex Universe entered Gate 1 (ประตูรอง)", time: "Yesterday, 08:12 AM", status: "Late entry logged", col: "text-amber-400" }
+                    ].map((note, index) => (
+                      <div key={index} className="bg-white/5 p-4 rounded-2.5xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
+                        <div>
+                          <h4 className="text-white text-xs font-bold">{note.title}</h4>
+                          <p className="text-[9px] text-white/45">{note.time}</p>
+                        </div>
+                        <span className={`text-[9.5px] font-mono font-bold uppercase tracking-wider ${note.col}`}>{note.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* SEMESTER ANALYSIS FOR PARENTS */
+                <div className="space-y-6">
+                  
+                  {/* Rate statistics header */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-4 bg-white/5 border border-white/10 p-5 rounded-3xl flex flex-col justify-center items-center text-center space-y-2">
+                      <span className="text-[9px] text-teal-400 uppercase font-mono tracking-widest font-bold">อัตราสถิติรวม (เทอม 1/2569)</span>
+                      <div className="relative w-28 h-28 flex items-center justify-center">
+                        <svg className="absolute w-full h-full transform -rotate-90">
+                          <circle cx="56" cy="56" r="48" className="stroke-white/10 fill-none" strokeWidth="6" />
+                          <circle cx="56" cy="56" r="48" className="stroke-teal-600 fill-none transition-all duration-1000" strokeWidth="6" strokeDasharray="301.6" strokeDashoffset="10.5" />
+                        </svg>
+                        <div className="text-center font-mono">
+                          <span className="text-2xl font-black text-white block">96.5%</span>
+                          <span className="text-[9px] text-white/45 font-sans leading-none block">สายสะสม 2%</span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-white/60 leading-tight">มาจริง 86 วันสาย 2 วัน จากวันเรียนทั้งหมด 90 วัน</span>
+                    </div>
+
+                    <div className="md:col-span-8 bg-[#091512] border border-teal-500/10 p-5 rounded-3xl flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <span className="text-[9px] text-teal-450 text-teal-400 font-mono font-bold uppercase tracking-wider block">✓ GUARDIAN INSIGHTS SUMMARY</span>
+                        <h4 className="text-white font-bold text-sm">รายงานประสิทธิผลความสม่ำเสมอของบุตรหลาน</h4>
+                        <p className="text-[11.5px] text-white/70 leading-relaxed font-sans">
+                          Alex Universe มีความรับผิดชอบอย่างก้าวหน้ามาก อัตราการเข้าเรียนเฉลี่ยในวิชาคณิตศาสตร์และคอมพิวเตอร์อยู่ในระดับดีเด่นตลอดภาคเรียน ไม่มีประวัติการขาดเรียนโดยไม่ได้รับสิทธิ์รับรอง มีส่วนร่วมนอกห้องเรียนและจิตอาสาสมบูรณ์
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3.5 mt-2.5">
+                        <div className="space-y-0.5 font-sans">
+                          <span className="text-[10px] text-white/40 block">ประเมินสัดส่วนพัฒนาการ</span>
+                          <span className="text-white text-xs font-bold leading-none font-mono">ระดับเอ (Excellent Tracker)</span>
+                        </div>
+                        <div className="space-y-0.5 font-sans">
+                          <span className="text-[10px] text-white/40 block">ใบลาอนุมัติสะสม</span>
+                          <span className="text-teal-400 text-xs font-bold leading-none font-mono">3 ครั้ง (ผ่านการรับรองระบบ)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 90-Days Heatmap Grid */}
+                  <div className="bg-[#0e0e0e] border border-white/5 p-5 rounded-3xl space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1.5 pb-2 border-b border-white/5">
+                      <div>
+                        <span className="text-[10px] text-teal-400 font-mono font-bold uppercase tracking-widest block">SEMESTER DAY-BY-DAY ATTENDANCE HEATMAP (90 วัน)</span>
+                        <p className="text-[9px] text-white/40 mt-1">แต่ละช่องคือตารางเรียน เรียงตามสัปดาห์ (วันจันทร์ ถึง วันศุกร์)</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2.5 text-[8.5px] text-white/50 font-mono">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-teal-600 inline-block" /> มาเรียน (84)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-500 inline-block" /> สาย (2)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> ลา (3)</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-rose-600 inline-block" /> ขาด (1)</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-10 sm:grid-cols-18 gap-1.5 py-2">
+                      {Array.from({ length: 90 }, (_, i) => {
+                        let label = 'มาเรียนปกติ';
+                        let colorClass = 'bg-teal-600';
+                        if (i === 12) { label = 'สาย'; colorClass = 'bg-yellow-500'; }
+                        else if (i === 34) { label = 'ลาป่วย'; colorClass = 'bg-blue-500'; }
+                        else if (i === 55) { label = 'ขาด'; colorClass = 'bg-rose-600'; }
+                        else if (i === 72) { label = 'สาย'; colorClass = 'bg-yellow-500'; }
+                        else if (i === 81) { label = 'ลา'; colorClass = 'bg-blue-500'; }
+                        else if (i === 88) { label = 'ลา'; colorClass = 'bg-blue-500'; }
+
+                        return (
+                          <div 
+                            key={i}
+                            title={`วันที่ ${i + 1}: ${label}`}
+                            className={`aspect-square sm:w-full rounded-md border border-white/5 ${colorClass} text-[8px] flex items-center justify-center font-bold text-black/40 hover:scale-115 transition-transform cursor-pointer relative group`}
+                          >
+                            {i + 1}
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 bg-black text-white text-[7px] p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none mb-1">
+                              Day {i + 1}: {label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Monthly breakdowns */}
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3">
+                    <span className="text-[10px] text-white/45 font-mono uppercase font-bold tracking-widest pl-0.5">สรุปสถิตินับจำนวนแยกเป็นรายเดือน</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {[
+                        { month: 'มิถุนายน 2026', rate: '100%', detail: 'มา 15 คาบ, ลา 0 คาบ', barWidth: 'w-full' },
+                        { month: 'พฤษภาคม 2026', rate: '96%', detail: 'มา 24 คาบ, ลา 1 คาบ', barWidth: 'w-[96%]' },
+                        { month: 'เมษายน 2026', rate: '95%', detail: 'มา 22 คาบ, ขาด 1 คาบ', barWidth: 'w-[95%]' },
+                        { month: 'มีนาคม 2026', rate: '92%', detail: 'มา 24 คาบ, สาย 1 คาบ, ลา 1 คาบ', barWidth: 'w-[92%]' }
+                      ].map((item, idx) => (
+                        <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-1.5 hover:bg-white/10 transition-colors">
+                          <div className="flex justify-between font-bold">
+                            <span className="text-white">{item.month}</span>
+                            <span className="text-teal-400 font-mono">{item.rate}</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                            <div className={`bg-teal-500 h-full ${item.barWidth}`} />
+                          </div>
+                          <span className="text-[9.5px] text-white/40 block leading-none">{item.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Subject metrics breakdown */}
+                  <div className="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3">
+                    <span className="text-[10px] text-white/45 font-mono uppercase font-bold tracking-widest pl-0.5">การตอบรับช่วงเวลาเรียนของบุตรหลานรายวิชาหลัก</span>
+                    <div className="space-y-3">
+                      {[
+                        { title: 'Advanced Physics (ฟิสิกส์วิจัยและแบบทัศนะ)', attended: '39 / 40 คาบ', percent: '97.5%' },
+                        { title: 'Mathematical Calculus (แคลคูลัสแผนเรขาคณิต)', attended: '40 / 40 คาบ', percent: '100%' },
+                        { title: 'Computer Science and AI Programming', attended: '28 / 30 คาบ', percent: '93.3%' },
+                        { title: 'Social & Collaborative Merits (จิตอาสาและสังคม)', attended: '36 / 36 คาบ', percent: '100%' }
+                      ].map((sub, idx) => (
+                        <div key={idx} className="space-y-1 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white/85 font-semibold leading-tight">{sub.title}</span>
+                            <div className="space-x-2 font-mono">
+                              <span className="text-white/50">{sub.attended}</span>
+                              <span className="text-teal-400 font-bold">{sub.percent}</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-teal-500 h-full" style={{ width: sub.percent }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
             </div>
           </motion.div>
         )}
@@ -324,7 +505,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                 <button 
                   onClick={() => {
                     setNewsAlertsEnabled(!newsAlertsEnabled);
-                    alert(newsAlertsEnabled ? "ปิดการแจ้งเตือน SMS ข่าวด่วน" : "เปิดระบบแจ้งเตือน SMS ข่าวด่วนยามวิกฤตเรียบร้อย!");
+                    showToast(newsAlertsEnabled ? "ปิดการแจ้งเตือน SMS ข่าวด่วน" : "เปิดระบบแจ้งเตือน SMS ข่าวด่วนยามวิกฤตเรียบร้อย!");
                   }}
                   className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-colors ${newsAlertsEnabled ? 'bg-orange-500' : 'bg-white/10'}`}
                 >
@@ -838,7 +1019,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                   onClick={() => {
                     if (!clinicTopic || !clinicTime) return;
                     setClinicBookings(prev => [...prev, { teacher: clinicTeacher, time: clinicTime, topic: clinicTopic, type: clinicType }]);
-                    alert("บันทึกนัดหมายสำเร็จ! คุณครูจะตอบรับเวลาเข้าเครื่องช่วยเตือนใน 15 นาที");
+                    showToast("บันทึกนัดหมายสำเร็จ! คุณครูจะตอบรับเวลาเข้าเครื่องช่วยเตือนใน 15 นาที");
                   }}
                   className="w-full py-3 bg-rose-600 hover:bg-rose-500 rounded-xl text-white font-bold text-xs uppercase cursor-pointer transition-colors"
                 >
@@ -956,7 +1137,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       ]);
                       setNewPostTitle("");
                       setNewPostContent("");
-                      alert("ส่งกระทู้ขึ้นกระดานบอร์ดผู้ปกครองสำเร็จ!");
+                      showToast("ส่งกระทู้ขึ้นกระดานบอร์ดผู้ปกครองสำเร็จ!");
                     }}
                     className="py-2.5 px-6 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-xs uppercase cursor-pointer"
                   >
@@ -1005,6 +1186,21 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         <button onClick={() => setIsHomeworkOpen(true)} className="p-2 text-white/40 cursor-pointer"><CalendarCheck className="w-6 h-6" /></button>
         <button onClick={() => setIsNewsOpen(true)} className="p-2 text-white/40 cursor-pointer"><Newspaper className="w-6 h-6" /></button>
       </div>
+
+      {/* Dynamic Toast System */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="absolute bottom-24 left-6 right-6 bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-3.5 rounded-xl border border-teal-400/30 text-xs font-semibold shadow-2xl z-[999] flex items-center gap-2.5"
+          >
+            <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
